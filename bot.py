@@ -9,13 +9,14 @@ import os
 load_dotenv()
 
 # DB Info
-SUPABASE_URL = os.getenv("EXPO_PUBLIC_SUPABASE_URL")
-SUPABASE_KEY = os.getenv("EXPO_PUBLIC_SUPABASE_ANON_KEY")
+# SUPABASE_URL = os.getenv("EXPO_PUBLIC_SUPABASE_URL")
+# SUPABASE_KEY = os.getenv("EXPO_PUBLIC_SUPABASE_ANON_KEY")
 
 app = Flask(__name__)
 
 # Get the API token from environment variable
 API_TOKEN = os.getenv('TELEGRAM_API_TOKEN')
+print('token = ', API_TOKEN)
 
 updater = Updater(API_TOKEN)
 dispatcher = updater.dispatcher
@@ -48,43 +49,44 @@ def ask_booking_details(update: Update, context: CallbackContext) -> None:
     )
 
     # Attempt to verify NUSNET ID with Supabase
-    response = requests.post(
-        f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
-        headers={
-            "apikey": SUPABASE_KEY,
-            "Content-Type": "application/json"
-        },
-        json={
-            "nusnet_id": nusnet_id
-        }
-    )
+    # response = requests.post(
+    #     f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
+    #     headers={
+    #         "apikey": SUPABASE_KEY,
+    #         "Content-Type": "application/json"
+    #     },
+    #     json={
+    #         "nusnet_id": nusnet_id
+    #     }
+    # )
 
-    if response.status_code == 200:
-        data = response.json()
-        access_token = data.get('access_token')
-        user_id = data.get('user', {}).get('id')
+    # if response.status_code == 200:
+    #     data = response.json()
+    #     access_token = data.get('access_token')
+    #     user_id = data.get('user', {}).get('id')
 
-        if access_token and user_id:
-            telegram_id = update.message.from_user.id
-            metadata_response = requests.put(
-                f"{SUPABASE_URL}/auth/v1/user",
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "data": {"telegram_id": telegram_id}
-                }
-            )
-            if metadata_response.status_code == 200:
-                update.message.reply_text("Booking successful! Your account has been linked.")
-            else:
-                update.message.reply_text("Failed to update user metadata.")
-        else:
-            update.message.reply_text("Failed to retrieve user data.")
-    else:
-        update.message.reply_text("Booking failed. Please check your NUSNET ID. Click /book again once you are ready to book the Buttery.")
+    #     if access_token and user_id:
+    #         telegram_id = update.message.from_user.id
+    #         metadata_response = requests.put(
+    #             f"{SUPABASE_URL}/auth/v1/user",
+    #             headers={
+    #                 "apikey": SUPABASE_KEY,
+    #                 "Authorization": f"Bearer {access_token}",
+    #                 "Content-Type": "application/json"
+    #             },
+    #             json={
+    #                 "data": {"telegram_id": telegram_id}
+    #             }
+    #         )
+    #         if metadata_response.status_code == 200:
+    #             update.message.reply_text("Booking successful! Your account has been linked.")
+    #         else:
+    #             update.message.reply_text("Failed to update user metadata.")
+    #     else:
+    #         update.message.reply_text("Failed to retrieve user data.")
+    # else:
+        # update.message.reply_text("Booking failed. Please check your NUSNET ID. Click /book again once you are ready to book the Buttery.")
+    update.message.reply_text("Sorry we actually havent finished lol")
 
     return ConversationHandler.END
 
