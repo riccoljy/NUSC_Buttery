@@ -126,6 +126,7 @@ async def ask_purpose(update: Update, context: CallbackContext) -> int:
         f"Booking Request by @{telehandle}:\n"
         f"Buttery: {context.user_data['chosen_buttery']}\n"
         f"Date: {context.user_data['booking_date']}\n"
+        f"Time: {context.user_data['booking_time']}\n"
         f"Duration: {context.user_data['duration']}\n"
         f"Purpose: {purpose}"
     )
