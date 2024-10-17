@@ -100,12 +100,12 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
     
 async def ask_time(update:Update, context: CallbackContext) -> int:
     context.user_data['booking_time'] = update.message.text
-    await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
+    await update.message.reply_text("How long is your booking? (Please select a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
     return ASK_DURATION
 
 async def ask_duration(update: Update, context: CallbackContext) -> int:
     try:
-        duration = int(update.message.text)
+        duration = float(update.message.text)
         if 1 <= duration <= 4:
             context.user_data['duration'] = duration
             await update.message.reply_text("What is the purpose of this booking?", reply_markup=ReplyKeyboardRemove())
@@ -127,7 +127,7 @@ async def ask_purpose(update: Update, context: CallbackContext) -> int:
         f"Buttery: {context.user_data['chosen_buttery']}\n"
         f"Date: {context.user_data['booking_date']}\n"
         f"Time: {context.user_data['booking_time']}\n"
-        f"Duration: {context.user_data['duration']}\n"
+        f"Duration: {context.user_data['duration']} hours\n"
         f"Purpose: {purpose}"
     )
 
