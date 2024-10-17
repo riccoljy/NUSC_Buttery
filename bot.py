@@ -19,7 +19,7 @@ MESSAGE_THREAD_ID = os.getenv('MESSAGE_THREAD_ID')
 application = Application.builder().token(API_TOKEN).build()
 
 # Define conversation states
-ASK_BUTTERY, ASK_DATE, ASK_DURATION, ASK_PURPOSE = range(4)
+ASK_BUTTERY, ASK_DATE, ASK_DURATION, ASK_PURPOSE, ASK_TIME = range(5)
 
 # Reply keyboard markup configurations
 reply_markup_buttery = ReplyKeyboardMarkup([["Saga Buttery", "Elm Buttery"]], one_time_keyboard=True, resize_keyboard=True)
@@ -78,8 +78,8 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
         
         context.user_data['booking_date'] = selected_date.strftime("%d/%m/%Y")
         await update.message.reply_text(f"Your booking has been selected for {date_str[1:]} ({context.user_data['booking_date']}).")
-        await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
-        return ASK_DURATION
+        await update.message.reply_text("What time is your booking?")
+        return ASK_TIME
 
     # Validate normal date input
     try:
@@ -89,14 +89,19 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
         
         if today <= date_obj <= max_date:
             context.user_data['booking_date'] = date_str
-            await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
-            return ASK_DURATION
+            await update.message.reply_text("What time is your booking?")
+            return ASK_TIME
         else:
             await update.message.reply_text("Please enter a valid date between today and one month from now.")
             return ASK_DATE
     except ValueError:
         await update.message.reply_text("Invalid date format. Please send the date in DD/MM/YYYY format.")
         return ASK_DATE
+    
+async def ask_time(update:Update, context: CallbackContext) -> int:
+    context.user_data['booking_time'] = update.message.text
+    await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
+    return ASK_DURATION
 
 async def ask_duration(update: Update, context: CallbackContext) -> int:
     try:
@@ -128,7 +133,7 @@ async def ask_purpose(update: Update, context: CallbackContext) -> int:
     await update.message.reply_text(booking_details)
     await application.bot.send_message(chat_id=GROUP_CHAT_ID, text=booking_details, message_thread_id=MESSAGE_THREAD_ID)
     
-    await update.message.reply_text("Your booking has been submitted. Please look out for a confirmation message. Thank you.")
+    await update.message.reply_text("Your booking has been submitted. \nPlease look out for a confirmation message. Thank you.")
     return ConversationHandler.END
 
 async def cancel(update: Update, context: CallbackContext) -> None:
@@ -141,6 +146,7 @@ create_booking_handler = ConversationHandler(
     states={
         ASK_BUTTERY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_buttery)],
         ASK_DATE: [MessageHandler(filters.TEXT, ask_date)],
+        ASK_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_time)],
         ASK_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_duration)],
         ASK_PURPOSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_purpose)],
     },
