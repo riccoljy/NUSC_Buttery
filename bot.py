@@ -1,16 +1,12 @@
 from flask import Flask, request
-from telegram import Update, ReplyKeyboardRemove
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext, ConversationHandler
+from telegram import Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler
 from dotenv import load_dotenv
-import requests
 import os
+from datetime import datetime, timedelta
 
 # Load environment variables from .env file
 load_dotenv()
-
-# DB Info
-# SUPABASE_URL = os.getenv("EXPO_PUBLIC_SUPABASE_URL")
-# SUPABASE_KEY = os.getenv("EXPO_PUBLIC_SUPABASE_ANON_KEY")
 
 app = Flask(__name__)
 
@@ -18,102 +14,151 @@ app = Flask(__name__)
 API_TOKEN = os.getenv('TELEGRAM_API_TOKEN')
 print('token = ', API_TOKEN)
 
-updater = Updater(API_TOKEN)
-dispatcher = updater.dispatcher
+# Create an instance of the Application
+application = Application.builder().token(API_TOKEN).build()
 
 # Define conversation states
-ASK_NUSNET_ID, ASK_BOOKING_DETAILS = range(2)
+ASK_BUTTERY, ASK_DATE, ASK_DURATION, ASK_PURPOSE = range(4)
 
-def start(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text(
-        "Let's start linking your account for booking the Buttery!\n"
+reply_markupButtery = ReplyKeyboardMarkup([["Saga Buttery", "Elm Buttery"]], one_time_keyboard=True, resize_keyboard=True)
+reply_markupDate = ReplyKeyboardMarkup([['1', '2', '3', '4']], one_time_keyboard=True, resize_keyboard=True)
+
+
+async def start(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text(
+        "Let's start your booking for the Buttery!\n"
         "If you don't wish to continue, click /cancel\n"
-        "Please enter your NUSNET ID:",
     )
-    return ASK_NUSNET_ID
+    return ASK_BUTTERY
 
-def ask_nusnet_id(update: Update, context: CallbackContext) -> None:
-    context.user_data['nusnet_id'] = update.message.text
-    update.message.reply_text(
-        "NUSNET ID received. If you don't wish to continue, click /cancel\n"
-        "Now, please provide the booking details (e.g., date, time, duration):",
-        reply_markup=ReplyKeyboardRemove()
+async def create_booking(update: Update, context: CallbackContext) -> int:
+    await update.message.reply_text(
+        "Hey! Which buttery would you like to book?",
+        reply_markup=reply_markupButtery
     )
-    return ASK_BOOKING_DETAILS
+    return ASK_BUTTERY
 
-def ask_booking_details(update: Update, context: CallbackContext) -> None:
-    booking_details = update.message.text
-    nusnet_id = context.user_data.get('nusnet_id')
-    update.message.reply_text(
-        "Please hang on while we verify your account and process the booking."
+async def ask_buttery(update: Update, context: CallbackContext) -> int:
+    chosen_buttery = update.message.text
+    if (chosen_buttery != "Saga Buttery" and chosen_buttery != "Elm Buttery"):
+        await update.message.reply_text(
+            "Please select a valid buttery.",
+            reply_markup=reply_markupButtery
+        )
+        return ASK_BUTTERY
+    context.user_data['chosen_buttery'] = chosen_buttery
+    
+    today = datetime.now().strftime("%d/%m/%Y")
+    max_date = (datetime.now() + timedelta(days=30)).strftime("%d/%m/%Y")
+
+    await update.message.reply_text(
+        f"What date would you like to book the {chosen_buttery}? \nSend date in DD/MM/YYYY format, or /today or /tomorrow.\n\nDate must be between {today} and {max_date}).", reply_markup=ReplyKeyboardRemove()
     )
+    return ASK_DATE
 
-    # Attempt to verify NUSNET ID with Supabase
-    # response = requests.post(
-    #     f"{SUPABASE_URL}/auth/v1/token?grant_type=password",
-    #     headers={
-    #         "apikey": SUPABASE_KEY,
-    #         "Content-Type": "application/json"
-    #     },
-    #     json={
-    #         "nusnet_id": nusnet_id
-    #     }
-    # )
+async def ask_date(update: Update, context: CallbackContext) -> int:
+    date_str = update.message.text
+    
+    # Handle /today command
+    if date_str == "/today":
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        context.user_data['booking_date'] = today.strftime("%d/%m/%Y")
+        await update.message.reply_text(f"Your booking has been selected for today ({context.user_data['booking_date']}).")
+        await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markupDate)
+        return ASK_DURATION
 
-    # if response.status_code == 200:
-    #     data = response.json()
-    #     access_token = data.get('access_token')
-    #     user_id = data.get('user', {}).get('id')
+    # Handle /tomorrow command
+    elif date_str == "/tomorrow":
+        tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        context.user_data['booking_date'] = tomorrow.strftime("%d/%m/%Y")
+        await update.message.reply_text(f"Your booking has been selected for tomorrow ({context.user_data['booking_date']}).")
+        await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markupDate)
+        return ASK_DURATION
+    
 
-    #     if access_token and user_id:
-    #         telegram_id = update.message.from_user.id
-    #         metadata_response = requests.put(
-    #             f"{SUPABASE_URL}/auth/v1/user",
-    #             headers={
-    #                 "apikey": SUPABASE_KEY,
-    #                 "Authorization": f"Bearer {access_token}",
-    #                 "Content-Type": "application/json"
-    #             },
-    #             json={
-    #                 "data": {"telegram_id": telegram_id}
-    #             }
-    #         )
-    #         if metadata_response.status_code == 200:
-    #             update.message.reply_text("Booking successful! Your account has been linked.")
-    #         else:
-    #             update.message.reply_text("Failed to update user metadata.")
-    #     else:
-    #         update.message.reply_text("Failed to retrieve user data.")
-    # else:
-        # update.message.reply_text("Booking failed. Please check your NUSNET ID. Click /book again once you are ready to book the Buttery.")
-    update.message.reply_text("Sorry we actually havent finished lol")
+    # Handle normal date input
+    try:
+        date_obj = datetime.strptime(date_str, "%d/%m/%Y")
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)  # Set to midnight
+        max_date = today + timedelta(days=30)
+        
+        if today <= date_obj <= max_date:
+            context.user_data['booking_date'] = date_str
+            await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markupDate)
+            return ASK_DURATION
+        else:
+            await update.message.reply_text("Please enter a valid date between today and one month from now.")
+            return ASK_DATE
+    except ValueError:
+        await update.message.reply_text("Invalid date format. Please send the date in DD/MM/YYYY format.")
+        return ASK_DATE
 
+
+async def ask_duration(update: Update, context: CallbackContext) -> int:
+    try:
+        duration = int(update.message.text)
+        if not (1 <= duration <= 4):
+            await update.message.reply_text("Please select a duration between 1 and 4 hours.", reply_markup=reply_markupDate)
+            return ASK_DURATION
+        
+        context.user_data['duration'] = duration
+        await update.message.reply_text("What is the purpose of this booking?", reply_markup=ReplyKeyboardRemove())
+        return ASK_PURPOSE
+    except ValueError:
+        await update.message.reply_text("Please select a valid number for the duration of booking.")
+        return ASK_DURATION
+
+
+
+async def ask_purpose(update: Update, context: CallbackContext) -> int:
+    purpose = update.message.text
+    context.user_data['purpose'] = purpose
+
+    telehandle = update.message.from_user.username
+
+    booking_details = (
+        f"Booking Request by @{telehandle}:\n"
+        f"Buttery: {context.user_data['chosen_buttery']}\n"
+        f"Date: {context.user_data['booking_date']}\n"
+        f"Duration: {context.user_data['duration']}\n"
+        f"Purpose: {purpose}"
+    )
+    
+    await update.message.reply_text(booking_details)
+    
+    group_chat_id = os.getenv('GROUP_CHAT_ID')
+    message_thread_id = os.getenv('MESSAGE_THREAD_ID')
+    await application.bot.send_message(chat_id=group_chat_id, text=booking_details, message_thread_id=message_thread_id)
+    
+    
+    await update.message.reply_text("Your booking has been submitted. Please look out for a confirmation message. Thank you.")
     return ConversationHandler.END
 
-def cancel(update: Update, context: CallbackContext) -> None:
-    update.message.reply_text('Booking process cancelled.', reply_markup=ReplyKeyboardRemove())
+async def cancel(update: Update, context: CallbackContext) -> None:
+    await update.message.reply_text('Booking process cancelled.', reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
-# Create a conversation handler with the states ASK_NUSNET_ID and ASK_BOOKING_DETAILS
-conv_handler = ConversationHandler(
-    entry_points=[CommandHandler('book', start)],
+# Create a conversation handler for creating bookings
+create_booking_handler = ConversationHandler(
+    entry_points=[CommandHandler('create_booking', create_booking)],
     states={
-        ASK_NUSNET_ID: [MessageHandler(Filters.text & ~Filters.command, ask_nusnet_id)],
-        ASK_BOOKING_DETAILS: [MessageHandler(Filters.text & ~Filters.command, ask_booking_details)]
+        ASK_BUTTERY: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_buttery)],
+        ASK_DATE: [MessageHandler(filters.TEXT, ask_date)],
+        ASK_DURATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_duration)],
+        ASK_PURPOSE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_purpose)],
     },
     fallbacks=[CommandHandler('cancel', cancel)]
 )
 
-dispatcher.add_handler(conv_handler)
+# Add the conversation handler to the application
+application.add_handler(create_booking_handler)
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     json_str = request.get_data(as_text=True)
-    update = Update.de_json(json_str, updater.bot)
-    dispatcher.process_update(update)
+    update = Update.de_json(json_str, application.bot)
+    application.process_update(update)
     return 'ok'
 
 if __name__ == '__main__':
-    updater.start_polling()
-    port = int(os.environ.get("PORT", 5000))  # Use the PORT environment variable
-    app.run(host='0.0.0.0', port=port)
+    application.run_polling()
