@@ -3,16 +3,17 @@ from telegram import Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler
 from dotenv import load_dotenv
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Load environment variables from .env file
 load_dotenv()
 
 app = Flask(__name__)
 
-# Get the API token from environment variable
+# Get the API token and other necessary configurations from environment variables
 API_TOKEN = os.getenv('TELEGRAM_API_TOKEN')
-print('token = ', API_TOKEN)
+GROUP_CHAT_ID = os.getenv('GROUP_CHAT_ID')
+MESSAGE_THREAD_ID = os.getenv('MESSAGE_THREAD_ID')
 
 # Create an instance of the Application
 application = Application.builder().token(API_TOKEN).build()
@@ -20,9 +21,11 @@ application = Application.builder().token(API_TOKEN).build()
 # Define conversation states
 ASK_BUTTERY, ASK_DATE, ASK_DURATION, ASK_PURPOSE = range(4)
 
-reply_markupButtery = ReplyKeyboardMarkup([["Saga Buttery", "Elm Buttery"]], one_time_keyboard=True, resize_keyboard=True)
-reply_markupDate = ReplyKeyboardMarkup([['1', '2', '3', '4']], one_time_keyboard=True, resize_keyboard=True)
+# Reply keyboard markup configurations
+reply_markup_buttery = ReplyKeyboardMarkup([["Saga Buttery", "Elm Buttery"]], one_time_keyboard=True, resize_keyboard=True)
+reply_markup_duration = ReplyKeyboardMarkup([['1', '2', '3', '4']], one_time_keyboard=True, resize_keyboard=True)
 
+SGT = timezone(timedelta(hours=8))
 
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
@@ -34,57 +37,59 @@ async def start(update: Update, context: CallbackContext) -> None:
 async def create_booking(update: Update, context: CallbackContext) -> int:
     await update.message.reply_text(
         "Hey! Which buttery would you like to book?",
-        reply_markup=reply_markupButtery
+        reply_markup=reply_markup_buttery
     )
     return ASK_BUTTERY
 
 async def ask_buttery(update: Update, context: CallbackContext) -> int:
     chosen_buttery = update.message.text
-    if (chosen_buttery != "Saga Buttery" and chosen_buttery != "Elm Buttery"):
+
+    # Validate the chosen buttery
+    if chosen_buttery not in ["Saga Buttery", "Elm Buttery"]:
         await update.message.reply_text(
             "Please select a valid buttery.",
-            reply_markup=reply_markupButtery
+            reply_markup=reply_markup_buttery
         )
         return ASK_BUTTERY
-    context.user_data['chosen_buttery'] = chosen_buttery
     
-    today = datetime.now().strftime("%d/%m/%Y")
-    max_date = (datetime.now() + timedelta(days=30)).strftime("%d/%m/%Y")
+    context.user_data['chosen_buttery'] = chosen_buttery
+    await ask_for_date(update, context)
+    return ASK_DATE
+
+async def ask_for_date(update: Update, context: CallbackContext) -> None:
+    today = datetime.now(SGT).strftime("%d/%m/%Y")
+    max_date = (datetime.now(SGT) + timedelta(days=30)).strftime("%d/%m/%Y")
 
     await update.message.reply_text(
-        f"What date would you like to book the {chosen_buttery}? \nSend date in DD/MM/YYYY format, or /today or /tomorrow.\n\nDate must be between {today} and {max_date}).", reply_markup=ReplyKeyboardRemove()
+        f"What date would you like to book the {context.user_data['chosen_buttery']}? \n"
+        f"Send date in DD/MM/YYYY format, or /today or /tomorrow.\n\n"
+        f"Date must be between {today} and {max_date}.",
+        reply_markup=ReplyKeyboardRemove()
     )
-    return ASK_DATE
 
 async def ask_date(update: Update, context: CallbackContext) -> int:
     date_str = update.message.text
-    
-    # Handle /today command
-    if date_str == "/today":
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-        context.user_data['booking_date'] = today.strftime("%d/%m/%Y")
-        await update.message.reply_text(f"Your booking has been selected for today ({context.user_data['booking_date']}).")
-        await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markupDate)
+
+    # Handle /today and /tomorrow commands
+    if date_str in ["/today", "/tomorrow"]:
+        selected_date = datetime.now(SGT).replace(hour=0, minute=0, second=0, microsecond=0)
+        if date_str == "/tomorrow":
+            selected_date += timedelta(days=1)
+        
+        context.user_data['booking_date'] = selected_date.strftime("%d/%m/%Y")
+        await update.message.reply_text(f"Your booking has been selected for {date_str[1:]} ({context.user_data['booking_date']}).")
+        await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
         return ASK_DURATION
 
-    # Handle /tomorrow command
-    elif date_str == "/tomorrow":
-        tomorrow = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
-        context.user_data['booking_date'] = tomorrow.strftime("%d/%m/%Y")
-        await update.message.reply_text(f"Your booking has been selected for tomorrow ({context.user_data['booking_date']}).")
-        await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markupDate)
-        return ASK_DURATION
-    
-
-    # Handle normal date input
+    # Validate normal date input
     try:
         date_obj = datetime.strptime(date_str, "%d/%m/%Y")
-        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)  # Set to midnight
+        today = datetime.now(SGT).replace(hour=0, minute=0, second=0, microsecond=0)
         max_date = today + timedelta(days=30)
         
         if today <= date_obj <= max_date:
             context.user_data['booking_date'] = date_str
-            await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markupDate)
+            await update.message.reply_text("How long is your booking? (Please send a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
             return ASK_DURATION
         else:
             await update.message.reply_text("Please enter a valid date between today and one month from now.")
@@ -93,27 +98,23 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
         await update.message.reply_text("Invalid date format. Please send the date in DD/MM/YYYY format.")
         return ASK_DATE
 
-
 async def ask_duration(update: Update, context: CallbackContext) -> int:
     try:
         duration = int(update.message.text)
-        if not (1 <= duration <= 4):
-            await update.message.reply_text("Please select a duration between 1 and 4 hours.", reply_markup=reply_markupDate)
+        if 1 <= duration <= 4:
+            context.user_data['duration'] = duration
+            await update.message.reply_text("What is the purpose of this booking?", reply_markup=ReplyKeyboardRemove())
+            return ASK_PURPOSE
+        else:
+            await update.message.reply_text("Please select a duration between 1 and 4 hours.", reply_markup=reply_markup_duration)
             return ASK_DURATION
-        
-        context.user_data['duration'] = duration
-        await update.message.reply_text("What is the purpose of this booking?", reply_markup=ReplyKeyboardRemove())
-        return ASK_PURPOSE
     except ValueError:
         await update.message.reply_text("Please select a valid number for the duration of booking.")
         return ASK_DURATION
 
-
-
 async def ask_purpose(update: Update, context: CallbackContext) -> int:
     purpose = update.message.text
     context.user_data['purpose'] = purpose
-
     telehandle = update.message.from_user.username
 
     booking_details = (
@@ -123,13 +124,9 @@ async def ask_purpose(update: Update, context: CallbackContext) -> int:
         f"Duration: {context.user_data['duration']}\n"
         f"Purpose: {purpose}"
     )
-    
+
     await update.message.reply_text(booking_details)
-    
-    group_chat_id = os.getenv('GROUP_CHAT_ID')
-    message_thread_id = os.getenv('MESSAGE_THREAD_ID')
-    await application.bot.send_message(chat_id=group_chat_id, text=booking_details, message_thread_id=message_thread_id)
-    
+    await application.bot.send_message(chat_id=GROUP_CHAT_ID, text=booking_details, message_thread_id=MESSAGE_THREAD_ID)
     
     await update.message.reply_text("Your booking has been submitted. Please look out for a confirmation message. Thank you.")
     return ConversationHandler.END
