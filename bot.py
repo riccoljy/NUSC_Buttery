@@ -60,7 +60,7 @@ async def ask_buttery(update: Update, context: CallbackContext) -> int:
         return ASK_BUTTERY
     
     context.user_data['chosen_buttery'] = chosen_buttery
-    bookingDetails["buttery"] = 9 if chosen_buttery == "Saga Buttery" else 11
+    bookingDetails["buttery"] = chosen_buttery #9 if chosen_buttery == "Saga Buttery" else 11
     await ask_for_date(update, context)
     return ASK_DATE
 
@@ -69,7 +69,9 @@ async def ask_for_date(update: Update, context: CallbackContext) -> None:
     max_date = (datetime.now(SGT) + timedelta(days=30)).strftime("%d/%m/%Y")
 
     await update.message.reply_text(
-        f"What date would you like to book the {'Saga' if bookingDetails['buttery'] == 9 else 'Elm'} Buttery? \n"
+        f"What date would you like to book the "
+        f"{bookingDetails['buttery']}?\n"
+        #{'Saga' if bookingDetails['buttery'] == 9 else 'Elm'} Buttery? \n"
         f"Send date in DD/MM/YYYY format, or /today or /tomorrow.\n\n"
         f"Date must be between {today} and {max_date}.",
         reply_markup=ReplyKeyboardRemove()
@@ -120,7 +122,7 @@ async def ask_duration(update: Update, context: CallbackContext) -> int:
         duration = float(update.message.text)
         if 1 <= duration <= 4:
             context.user_data['duration'] = duration
-            bookingDetails["duration"] = duration
+            bookingDetails['duration'] = duration
             await update.message.reply_text("What is the purpose of this booking?", reply_markup=ReplyKeyboardRemove())
             return ASK_PURPOSE
         else:
@@ -160,6 +162,33 @@ async def ask_purpose(update: Update, context: CallbackContext) -> int:
     await update.message.reply_text("Your booking has been submitted. \nPlease look out for a confirmation message. Thank you.")
     return ConversationHandler.END
 
+async def list_bookings(update: Update, context: CallbackContext) -> None:
+    telehandle = update.message.from_user.username
+
+    # Query the bookings for the user
+    response = supabase.table("Processed Booking Request").select("*").eq("telehandle", telehandle).execute()
+    
+    # Check if there are any bookings
+    bookings = response.data
+    if not bookings:
+        await update.message.reply_text("You have no bookings.")
+        return
+    
+    # Format the bookings for display
+    booking_messages = []
+    for booking in bookings:
+        booking_info = (
+            f"Buttery: {booking['buttery']}\n"
+            f"Date: {booking['date']}\n"
+            f"Time: {booking['time']}\n"
+            f"Duration: {booking['duration']} hours\n"
+            f"Purpose: {booking['purpose']}\n"
+            "--------------------------"
+        )
+        booking_messages.append(booking_info)
+
+    await update.message.reply_text(f"You currently have these bookings: \n\n"+"\n".join(booking_messages))
+
 async def cancel(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text('Booking process cancelled.', reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
@@ -179,6 +208,7 @@ create_booking_handler = ConversationHandler(
 
 # Add the conversation handler to the application
 application.add_handler(create_booking_handler)
+application.add_handler(CommandHandler('list_bookings', list_bookings))
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
