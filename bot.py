@@ -69,7 +69,7 @@ async def ask_for_date(update: Update, context: CallbackContext) -> None:
     max_date = (datetime.now(SGT) + timedelta(days=30)).strftime("%d/%m/%Y")
 
     await update.message.reply_text(
-        f"What date would you like to book the *{bookingDetails["Buttery"]}*? \n"
+        f"What date would you like to book the *{bookingDetails['buttery']}*? \n"
         f"Send date in DD/MM/YYYY format, or /today or /tomorrow.\n\n"
         f"Date must be between {today} and {max_date}.",
         reply_markup=ReplyKeyboardRemove()
@@ -86,7 +86,7 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
         
         context.user_data['booking_date'] = selected_date.strftime("%d/%m/%Y")
         bookingDetails["date"] = selected_date.strftime("%d/%m/%Y")
-        await update.message.reply_text(f"Your booking has been selected for {date_str[1:]} ({bookingDetails["date"]}).")
+        await update.message.reply_text(f"Your booking has been selected for {date_str[1:]} ({bookingDetails['date']}).")
         await update.message.reply_text("What time is your booking?")
         return ASK_TIME
 
