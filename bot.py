@@ -3,6 +3,7 @@ from telegram import Update, ReplyKeyboardRemove, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, ConversationHandler
 from dotenv import load_dotenv
 import os
+from supabase import create_client, Client
 from datetime import datetime, timedelta, timezone
 
 # Load environment variables from .env file
@@ -10,13 +11,17 @@ load_dotenv()
 
 app = Flask(__name__)
 
+
 # Get the API token and other necessary configurations from environment variables
 API_TOKEN = os.getenv('TELEGRAM_API_TOKEN')
 GROUP_CHAT_ID = os.getenv('GROUP_CHAT_ID')
 MESSAGE_THREAD_ID = os.getenv('MESSAGE_THREAD_ID')
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
 
 # Create an instance of the Application
 application = Application.builder().token(API_TOKEN).build()
+supabase: Client = create_client(supabase_url=SUPABASE_URL, supabase_key=SUPABASE_KEY)
 
 # Define conversation states
 ASK_BUTTERY, ASK_DATE, ASK_DURATION, ASK_PURPOSE, ASK_TIME = range(5)
@@ -26,6 +31,8 @@ reply_markup_buttery = ReplyKeyboardMarkup([["Saga Buttery", "Elm Buttery"]], on
 reply_markup_duration = ReplyKeyboardMarkup([['1', '2', '3', '4']], one_time_keyboard=True, resize_keyboard=True)
 
 SGT = timezone(timedelta(hours=8))
+
+bookingDetails = {}
 
 async def start(update: Update, context: CallbackContext) -> None:
     await update.message.reply_text(
@@ -53,6 +60,7 @@ async def ask_buttery(update: Update, context: CallbackContext) -> int:
         return ASK_BUTTERY
     
     context.user_data['chosen_buttery'] = chosen_buttery
+    bookingDetails["buttery"] = 9 if chosen_buttery == "Saga Buttery" else 11
     await ask_for_date(update, context)
     return ASK_DATE
 
@@ -61,7 +69,7 @@ async def ask_for_date(update: Update, context: CallbackContext) -> None:
     max_date = (datetime.now(SGT) + timedelta(days=30)).strftime("%d/%m/%Y")
 
     await update.message.reply_text(
-        f"What date would you like to book the {context.user_data['chosen_buttery']}? \n"
+        f"What date would you like to book the *{bookingDetails["Buttery"]}*? \n"
         f"Send date in DD/MM/YYYY format, or /today or /tomorrow.\n\n"
         f"Date must be between {today} and {max_date}.",
         reply_markup=ReplyKeyboardRemove()
@@ -77,7 +85,8 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
             selected_date += timedelta(days=1)
         
         context.user_data['booking_date'] = selected_date.strftime("%d/%m/%Y")
-        await update.message.reply_text(f"Your booking has been selected for {date_str[1:]} ({context.user_data['booking_date']}).")
+        bookingDetails["date"] = selected_date.strftime("%d/%m/%Y")
+        await update.message.reply_text(f"Your booking has been selected for {date_str[1:]} ({bookingDetails["date"]}).")
         await update.message.reply_text("What time is your booking?")
         return ASK_TIME
 
@@ -89,6 +98,7 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
         
         if today <= date_obj <= max_date:
             context.user_data['booking_date'] = date_str
+            bookingDetails["date"] = date_str
             await update.message.reply_text("What time is your booking?")
             return ASK_TIME
         else:
@@ -99,7 +109,9 @@ async def ask_date(update: Update, context: CallbackContext) -> int:
         return ASK_DATE
     
 async def ask_time(update:Update, context: CallbackContext) -> int:
-    context.user_data['booking_time'] = update.message.text
+    time = update.message.text
+    context.user_data['booking_time'] = time
+    bookingDetails["time"] = time
     await update.message.reply_text("How long is your booking? (Please select a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
     return ASK_DURATION
 
@@ -108,6 +120,7 @@ async def ask_duration(update: Update, context: CallbackContext) -> int:
         duration = float(update.message.text)
         if 1 <= duration <= 4:
             context.user_data['duration'] = duration
+            bookingDetails["duration"] = duration
             await update.message.reply_text("What is the purpose of this booking?", reply_markup=ReplyKeyboardRemove())
             return ASK_PURPOSE
         else:
@@ -120,16 +133,26 @@ async def ask_duration(update: Update, context: CallbackContext) -> int:
 async def ask_purpose(update: Update, context: CallbackContext) -> int:
     purpose = update.message.text
     context.user_data['purpose'] = purpose
+    bookingDetails['purpose'] = purpose
     telehandle = update.message.from_user.username
 
     booking_details = (
         f"Booking Request by @{telehandle}:\n"
-        f"Buttery: {context.user_data['chosen_buttery']}\n"
-        f"Date: {context.user_data['booking_date']}\n"
-        f"Time: {context.user_data['booking_time']}\n"
-        f"Duration: {context.user_data['duration']} hours\n"
+        f"Buttery: {bookingDetails['buttery']}\n"
+        f"Date: {bookingDetails['date']}\n"
+        f"Time: {bookingDetails['time']}\n"
+        f"Duration: {bookingDetails['duration']} hours\n"
         f"Purpose: {purpose}"
     )
+    
+    supabase.table("Processed Booking Request").insert({
+        "telehandle": telehandle,
+        "buttery": bookingDetails['buttery'],
+        "date": bookingDetails['date'],
+        "time": bookingDetails['time'],
+        "duration": bookingDetails['duration'],
+        "purpose": purpose
+    }).execute()
 
     await update.message.reply_text(booking_details)
     await application.bot.send_message(chat_id=GROUP_CHAT_ID, text=booking_details, message_thread_id=MESSAGE_THREAD_ID)
