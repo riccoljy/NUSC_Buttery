@@ -144,6 +144,38 @@ async def ask_purpose(update, context) -> int:
     await update.message.reply_text("Your booking has been submitted. \nPlease look out for a confirmation message. Thank you.")
     return ConversationHandler.END
 
+# Function to send hourly reminders
+async def send_reminders():
+
+    # Fetch bookings for the next hour
+    response = supabase.table("Processed Booking Request").select("*").execute()
+
+    if response.data:
+        for booking in response.data:
+            # If booking is within the next hour, send reminder
+            # if now <= booking_time <= now + timedelta(hours=1):
+            telehandle = booking['telehandle']
+            booking_details = (
+                f"Reminder: You have a booking at {booking['buttery']}.\n"
+                f"Date: {booking['date']}\n"
+                f"Time: {booking['time']}\n"
+                f"Duration: {booking['duration']} hours\n"
+                f"Purpose: {booking['purpose']}"
+            )
+
+            # Send reminder to the user
+            await app_instance.bot.send_message(
+                chat_id=f"@{telehandle}",
+                text=f"Hi @{telehandle}, just a reminder for your upcoming buttery booking!\n\n{booking_details}"
+            )
+
+            # Optionally: Send the same reminder to the group chat (if required)
+            await app_instance.bot.send_message(
+                chat_id=group_chat_id,
+                text=f"Reminder for @{telehandle}:\n\n{booking_details}",
+                message_thread_id=message_thread_id
+            )
+
 # ConversationHandler for bookings
 create_booking_handler = ConversationHandler(
     entry_points=[CommandHandler('create_booking', create_booking)],
