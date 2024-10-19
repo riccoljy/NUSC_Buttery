@@ -29,7 +29,7 @@ def set_application_booking(application, chat_id, thread_id):
 
 async def create_booking(update, context) -> int:
     await update.message.reply_text(
-        "Hey! Which buttery would you like to book?",
+        "Hey! Which buttery would you like to book?\n\n(Step 1 of 5)",
         reply_markup=reply_markup_buttery
     )
     set_started_booking_process(True)
@@ -60,7 +60,7 @@ async def ask_for_date(update, context) -> None:
         f"<b>{bookingDetails['buttery']}</b>?\n"
         #{'Saga' if bookingDetails['buttery'] == 9 else 'Elm'} Buttery? \n"
         f"Send date in DD/MM/YYYY format, or /today or /tomorrow.\n\n"
-        f"Date must be between {today} and {max_date}.",
+        f"Date must be between {today} and {max_date}.\n\n(Step 2 of 5)",
         reply_markup=ReplyKeyboardRemove(),
         parse_mode='HTML'
     )
@@ -77,7 +77,7 @@ async def ask_date(update, context) -> int:
         context.user_data['booking_date'] = selected_date.strftime("%d/%m/%Y")
         bookingDetails["date"] = selected_date.strftime("%d/%m/%Y")
         await update.message.reply_text(f"Your booking has been selected for <b>{date_str[1:]} ({bookingDetails['date']}</b>).", parse_mode='HTML')
-        await update.message.reply_text("What time is your does your booking start? \n\nPlease enter time in HHMM format in 30 min intervals (eg: 0700 or 2130).")
+        await update.message.reply_text("What time is your does your booking start? \n\nPlease enter time in HHMM format in 30 min intervals (eg: 0700 or 2130).\n\n(Step 3 of 5)")
         return ASK_TIME
 
     # Validate normal date input
@@ -90,7 +90,7 @@ async def ask_date(update, context) -> int:
             date_obj = date_obj.strftime("%d/%m/%Y")
             context.user_data['booking_date'] = date_str
             bookingDetails["date"] = date_str
-            await update.message.reply_text("What time is your does your booking start? \n\nPlease enter time in HHMM format in 30 min intervals (eg: 0700 or 2130).")
+            await update.message.reply_text("What time is your does your booking start? \n\nPlease enter time in HHMM format in 30 min intervals (eg: 0700 or 2130).\n\n(Step 3 of 5)")
             return ASK_TIME
         else:
             await update.message.reply_text(f"Please enter a valid date between today and one month from now (between {today.strftime('%d/%m/%Y')} and {max_date.strftime('%d/%m/%Y')}). ")
@@ -119,7 +119,7 @@ async def ask_time(update, context) -> int:
         context.user_data['booking_time'] = time_input
         bookingDetails["time"] = time_input
         await update.message.reply_text(
-            "How long is your booking? (Please select a time range of 1 to 4 hours)",
+            "How long is your booking? (Please select a time range of 1 to 4 hours)\n\n(Step 4 of 5)",
             reply_markup=reply_markup_duration
         )
         return ASK_DURATION
@@ -137,7 +137,7 @@ async def ask_duration(update, context) -> int:
         if 1 <= duration <= 4:
             context.user_data['duration'] = duration
             bookingDetails['duration'] = duration
-            await update.message.reply_text("What is the purpose of this booking?", reply_markup=ReplyKeyboardRemove())
+            await update.message.reply_text("What is the purpose of this booking?\n\n(Step 5 of 5)", reply_markup=ReplyKeyboardRemove())
             return ASK_PURPOSE
         else:
             await update.message.reply_text("Please select a duration between 1 and 4 hours.", reply_markup=reply_markup_duration)
