@@ -8,7 +8,7 @@ message_thread_id = None
 SGT = timezone(timedelta(hours=8))
 
 # Constants for repeated strings
-TEAM_REMINDER_MSG = "Hi Buttery Booking team! This is your hourly reminder."
+TEAM_REMINDER_MSG = "Hi Buttery Booking team! This is your hourly reminder.\n"
 # NO_BOOKINGS_MSG = "There are <u>no</u> unprocessed bookings at the moment."
 USER_REMINDER_PREFIX = "Hi @{},"  # For user reminder prefix
 BOOKING_REMINDER_MSG = (
@@ -42,7 +42,7 @@ async def send_reminders(context):
 async def send_team_reminder(unprocessed_count):
     await app_instance.bot.send_message(
         chat_id=group_chat_id,
-        text=f"{TEAM_REMINDER_MSG} You have {unprocessed_count} unprocessed {'booking' if unprocessed_count == 1 else 'bookings'}.",
+        text=f"{TEAM_REMINDER_MSG} You have <b>{unprocessed_count}</b> unprocessed {'booking' if unprocessed_count == 1 else 'bookings'}.",
         message_thread_id=message_thread_id,
         parse_mode='HTML'
     )
