@@ -176,7 +176,7 @@ async def ask_purpose(update, context) -> int:
     }).execute()
 
     await update.message.reply_text(booking_details)
-    await app_instance.bot.send_message(chat_id=group_chat_id, text=f"Hi my beloved booking ICs, you have a NEW booking!\xF0\x9F\x98\x9A\n\n{booking_details}", message_thread_id=message_thread_id)
+    await app_instance.bot.send_message(chat_id=group_chat_id, text=f"Hi my beloved booking ICs, you have a NEW booking!🥰🥰\n\n{booking_details}", message_thread_id=message_thread_id)
     await update.message.reply_text("Your booking has been submitted. \nPlease look out for a confirmation message. Thank you.")
     return ConversationHandler.END
 
