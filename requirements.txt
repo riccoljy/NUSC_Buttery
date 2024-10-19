@@ -1,4 +1,5 @@
 anyio==3.7.1
+APScheduler==3.10.4
 bleach==6.0.0
 certifi==2024.8.30
 charset-normalizer==3.4.0
@@ -34,9 +35,11 @@ postgrest-py==0.10.4
 pydantic==1.10.18
 Pygments==2.17.2
 python-dateutil==2.9.0.post0
+python-dotenv==1.0.1
 python-gitlab==3.15.0
 python-semantic-release==7.32.1
 python-telegram-bot==20.2
+pytz==2024.2
 pywin32-ctypes==0.2.3
 readme-renderer==37.3
 realtime==0.0.5
@@ -55,6 +58,8 @@ tomlkit==0.12.5
 tqdm==4.66.5
 twine==3.8.0
 typing_extensions==4.7.1
+tzdata==2024.2
+tzlocal==5.2
 urllib3==2.0.7
 webencodings==0.5.1
 websockets==10.4
