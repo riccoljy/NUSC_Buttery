@@ -24,7 +24,7 @@ SGT = timezone(timedelta(hours=8))
 now = datetime.now(SGT)
 next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 time_until_next_hour = (next_hour - now).total_seconds()
-job_queue.run_repeating(send_reminders, interval=10)
+job_queue.run_repeating(send_reminders, interval=3600, first = time_until_next_hour)
 
 # Register Telegram bot handlers
 application.add_handler(create_booking_handler)
