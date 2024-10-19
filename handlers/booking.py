@@ -112,7 +112,7 @@ async def ask_time(update, context) -> int:
         input_date = datetime.strptime(context.user_data['booking_date'], "%d/%m/%Y").date()
         if input_date == now.date() and booking_time < current_time:
             await update.message.reply_text(
-                "You cannot book a time in the past. Please enter a valid time.",
+                "You can't book for a time that has passed.......... Please enter a valid time...",
                 reply_markup=ReplyKeyboardRemove()
             )
             return ASK_TIME
@@ -176,7 +176,7 @@ async def ask_purpose(update, context) -> int:
     }).execute()
 
     await update.message.reply_text(booking_details)
-    await app_instance.bot.send_message(chat_id=group_chat_id, text=booking_details, message_thread_id=message_thread_id)
+    await app_instance.bot.send_message(chat_id=group_chat_id, text=f"Hi my beloved booking ICs, you have a NEW booking!\xF0\x9F\x98\x9A\n\n{booking_details}", message_thread_id=message_thread_id)
     await update.message.reply_text("Your booking has been submitted. \nPlease look out for a confirmation message. Thank you.")
     return ConversationHandler.END
 
