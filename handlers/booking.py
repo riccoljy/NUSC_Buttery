@@ -1,8 +1,11 @@
+import re
 from telegram.ext import CommandHandler, MessageHandler, filters, ConversationHandler
 from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove
 from datetime import datetime, timedelta, timezone
 from supabase_client import supabase
-from handlers.cancel import cancel_handler  # Import the cancel handler
+from handlers.cancel import cancel_handler
+from state import set_started_booking_process, is_booking_process_started
+
 
 # Define conversation states
 ASK_BUTTERY, ASK_DATE, ASK_DURATION, ASK_PURPOSE, ASK_TIME = range(5)
@@ -18,7 +21,7 @@ app_instance = None
 group_chat_id = None
 message_thread_id = None
 
-def set_application(application, chat_id, thread_id):
+def set_application_booking(application, chat_id, thread_id):
     global app_instance, group_chat_id, message_thread_id
     app_instance = application
     group_chat_id = chat_id
@@ -29,6 +32,7 @@ async def create_booking(update, context) -> int:
         "Hey! Which buttery would you like to book?",
         reply_markup=reply_markup_buttery
     )
+    set_started_booking_process(True)
     return ASK_BUTTERY
 
 async def ask_buttery(update, context) -> int:
@@ -73,33 +77,59 @@ async def ask_date(update, context) -> int:
         context.user_data['booking_date'] = selected_date.strftime("%d/%m/%Y")
         bookingDetails["date"] = selected_date.strftime("%d/%m/%Y")
         await update.message.reply_text(f"Your booking has been selected for <b>{date_str[1:]} ({bookingDetails['date']}</b>).", parse_mode='HTML')
-        await update.message.reply_text("What time is your booking?")
+        await update.message.reply_text("What time is your does your booking start? \n\nPlease enter time in HHMM format in 30 min intervals (eg: 0700 or 2130).")
         return ASK_TIME
 
     # Validate normal date input
     try:
-        date_obj = datetime.strptime(date_str, "%d/%m/%Y")
+        date_obj = datetime.strptime(date_str, "%d/%m/%Y").replace(tzinfo=SGT)
         today = datetime.now(SGT).replace(hour=0, minute=0, second=0, microsecond=0)
         max_date = today + timedelta(days=30)
         
         if today <= date_obj <= max_date:
+            date_obj = date_obj.strftime("%d/%m/%Y")
             context.user_data['booking_date'] = date_str
             bookingDetails["date"] = date_str
-            await update.message.reply_text("What time is your booking?")
+            await update.message.reply_text("What time is your does your booking start? \n\nPlease enter time in HHMM format in 30 min intervals (eg: 0700 or 2130).")
             return ASK_TIME
         else:
-            await update.message.reply_text("Please enter a valid date between today and one month from now.")
+            await update.message.reply_text(f"Please enter a valid date between today and one month from now (between {today.strftime('%d/%m/%Y')} and {max_date.strftime('%d/%m/%Y')}). ")
             return ASK_DATE
     except ValueError:
         await update.message.reply_text("Invalid date format. Please send the date in DD/MM/YYYY format.")
         return ASK_DATE
     
 async def ask_time(update, context) -> int:
-    time = update.message.text
-    context.user_data['booking_time'] = time
-    bookingDetails["time"] = time
-    await update.message.reply_text("How long is your booking? (Please select a time range of 1 to 4 hours)", reply_markup=reply_markup_duration)
-    return ASK_DURATION
+    time_input = update.message.text
+    
+    # Regular expression to match valid HHMM format with minutes being 00 or 30
+    time_format = re.compile(r"^([01]\d|2[0-3])(00|30)$")
+    
+    if time_format.match(time_input):
+        booking_time = datetime.strptime(time_input, "%H%M").time()
+        now = datetime.now(SGT)
+        current_time = now.time()
+        input_date = datetime.strptime(context.user_data['booking_date'], "%d/%m/%Y").date()
+        if input_date == now.date() and booking_time < current_time:
+            await update.message.reply_text(
+                "You cannot book a time in the past. Please enter a valid time.",
+                reply_markup=ReplyKeyboardRemove()
+            )
+            return ASK_TIME
+        context.user_data['booking_time'] = time_input
+        bookingDetails["time"] = time_input
+        await update.message.reply_text(
+            "How long is your booking? (Please select a time range of 1 to 4 hours)",
+            reply_markup=reply_markup_duration
+        )
+        return ASK_DURATION
+    else: # Invalid time format, prompt user to enter again
+        await update.message.reply_text(
+            "Invalid time format. Please enter time in HHMM format in 30 min intervals (eg: 0700 or 2130).",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return ASK_TIME
+
 
 async def ask_duration(update, context) -> int:
     try:
@@ -121,21 +151,26 @@ async def ask_purpose(update, context) -> int:
     context.user_data['purpose'] = purpose
     bookingDetails['purpose'] = purpose
     telehandle = update.message.from_user.username
+    userId = update.message.from_user.id
+    
+    date_str = bookingDetails['date']
+    time_str = bookingDetails['time']
+    booking_datetime = datetime.strptime(f"{date_str} {time_str}", "%d/%m/%Y %H%M").replace(tzinfo=SGT)
 
     booking_details = (
         f"Booking Request by @{telehandle}:\n"
         f"Buttery: {bookingDetails['buttery']}\n"
-        f"Date: {bookingDetails['date']}\n"
-        f"Time: {bookingDetails['time']}\n"
-        f"Duration: {bookingDetails['duration']} hours\n"
+        f"Date: {date_str}\n"
+        f"Time: {time_str}\n"
+        f"Duration: {str(bookingDetails['duration']) + (' hour' if bookingDetails['duration'] == 1 else ' hours')}\n"
         f"Purpose: {purpose}"
     )
     
     supabase.table("Unprocessed Booking Request").insert({
         "telehandle": telehandle,
+        "userChatID": userId,
         "buttery": bookingDetails['buttery'],
-        "date": bookingDetails['date'],
-        "time": bookingDetails['time'],
+        "datetime": booking_datetime.isoformat(),
         "duration": bookingDetails['duration'],
         "purpose": purpose
     }).execute()
@@ -144,46 +179,6 @@ async def ask_purpose(update, context) -> int:
     await app_instance.bot.send_message(chat_id=group_chat_id, text=booking_details, message_thread_id=message_thread_id)
     await update.message.reply_text("Your booking has been submitted. \nPlease look out for a confirmation message. Thank you.")
     return ConversationHandler.END
-
-# Function to send hourly reminders
-async def send_reminders(context):
-    # Fetch bookings for the next hour
-    response = supabase.table("Unprocessed Booking Request").select("*").execute()
-
-    if response.data:
-        for booking in response.data:
-            # If booking is within the next hour, send reminder
-            # if now <= booking_time <= now + timedelta(hours=1):
-            telehandle = booking['telehandle']
-            booking_details = (
-                f"Reminder: You have a booking at <b>{booking['buttery']}</b>.\n"
-                f"Date: {booking['date']}\n"
-                f"Time: {booking['time']}\n"
-                f"Duration: {booking['duration']} hours\n"
-                f"Purpose: {booking['purpose']}"
-            )
-
-            # Send reminder to the user
-            await app_instance.bot.send_message(
-                chat_id=f"@{telehandle}",
-                text=f"Hi @{telehandle}, just a reminder for your upcoming buttery booking!\n\n{booking_details}"
-            )
-
-            # Optionally: Send the same reminder to the group chat (if required)
-            await app_instance.bot.send_message(
-                chat_id=group_chat_id,
-                text=f"Reminder for @{telehandle}:\n\n{booking_details}",
-                message_thread_id=message_thread_id,
-                parse_mode='HTML'
-            )
-    else:
-        await app_instance.bot.send_message(
-                chat_id=group_chat_id,
-                text=f"Hi Buttery Booking team! This is your hourly reminder."
-                f"\nThere are <u>no</u> unprocessed bookings at the moment.",
-                message_thread_id=message_thread_id,
-                parse_mode='HTML'
-            )
 
 # ConversationHandler for bookings
 create_booking_handler = ConversationHandler(
