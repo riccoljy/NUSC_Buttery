@@ -9,7 +9,7 @@ SGT = timezone(timedelta(hours=8))
 
 # Constants for repeated strings
 TEAM_REMINDER_MSG = "Hi Buttery Booking team! This is your hourly reminder."
-NO_BOOKINGS_MSG = "There are <u>no</u> unprocessed bookings at the moment."
+# NO_BOOKINGS_MSG = "There are <u>no</u> unprocessed bookings at the moment."
 USER_REMINDER_PREFIX = "Hi @{},"  # For user reminder prefix
 BOOKING_REMINDER_MSG = (
     "Buttery: <b>{}</b>\n"
@@ -28,19 +28,16 @@ def set_application_reminder(application, chat_id, thread_id):
 async def send_reminders(context):
     # Fetch bookings for the next hour
     response = supabase.table("Unprocessed Booking Request").select("*").execute()
-
-    if response.data:
-        await send_team_reminder(len(response.data))
-        now = datetime.now(SGT)
-        one_hour_later = now + timedelta(hours=1)
-        for count, booking in enumerate(response.data, start=1):
-            await send_group_reminder(booking, count)
-            
-            booking_datetime_str = booking['datetime']
-            booking_datetime = datetime.fromisoformat(booking_datetime_str)
-            if now <= booking_datetime <= one_hour_later: await send_user_reminder(booking)
-    else:
-        await send_no_bookings_reminder()
+    if not response.data: return
+    await send_team_reminder(len(response.data))
+    now = datetime.now(SGT)
+    one_hour_later = now + timedelta(hours=1)
+    for count, booking in enumerate(response.data, start=1):
+        await send_group_reminder(booking, count)
+        
+        booking_datetime_str = booking['datetime']
+        booking_datetime = datetime.fromisoformat(booking_datetime_str)
+        if now <= booking_datetime <= one_hour_later: await send_user_reminder(booking)
 
 async def send_team_reminder(unprocessed_count):
     await app_instance.bot.send_message(
@@ -89,10 +86,10 @@ def format_booking_details(booking, booking_date, booking_time):
         booking['purpose']
     )
 
-async def send_no_bookings_reminder():
-    await app_instance.bot.send_message(
-        chat_id=group_chat_id,
-        text=f"{TEAM_REMINDER_MSG} {NO_BOOKINGS_MSG}",
-        message_thread_id=message_thread_id,
-        parse_mode='HTML'
-    )
+# async def send_no_bookings_reminder():
+#     await app_instance.bot.send_message(
+#         chat_id=group_chat_id,
+#         text=f"{TEAM_REMINDER_MSG} {NO_BOOKINGS_MSG}",
+#         message_thread_id=message_thread_id,
+#         parse_mode='HTML'
+#     )
