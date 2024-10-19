@@ -3,7 +3,7 @@ from supabase_client import supabase
 
 async def list_bookings(update, context):
     telehandle = update.message.from_user.username
-    response = supabase.table("Processed Booking Request").select("*").eq("telehandle", telehandle).execute()
+    response = supabase.table("Unprocessed Booking Request").select("*").eq("telehandle", telehandle).execute()
     bookings = response.data
     
     if not bookings:

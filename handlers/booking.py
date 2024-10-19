@@ -53,11 +53,12 @@ async def ask_for_date(update, context) -> None:
 
     await update.message.reply_text(
         f"What date would you like to book the "
-        f"{bookingDetails['buttery']}?\n"
+        f"<b>{bookingDetails['buttery']}</b>?\n"
         #{'Saga' if bookingDetails['buttery'] == 9 else 'Elm'} Buttery? \n"
         f"Send date in DD/MM/YYYY format, or /today or /tomorrow.\n\n"
         f"Date must be between {today} and {max_date}.",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=ReplyKeyboardRemove(),
+        parse_mode='HTML'
     )
 
 async def ask_date(update, context) -> int:
@@ -71,7 +72,7 @@ async def ask_date(update, context) -> int:
         
         context.user_data['booking_date'] = selected_date.strftime("%d/%m/%Y")
         bookingDetails["date"] = selected_date.strftime("%d/%m/%Y")
-        await update.message.reply_text(f"Your booking has been selected for {date_str[1:]} ({bookingDetails['date']}).")
+        await update.message.reply_text(f"Your booking has been selected for <b>{date_str[1:]} ({bookingDetails['date']}</b>).", parse_mode='HTML')
         await update.message.reply_text("What time is your booking?")
         return ASK_TIME
 
@@ -130,7 +131,7 @@ async def ask_purpose(update, context) -> int:
         f"Purpose: {purpose}"
     )
     
-    supabase.table("Processed Booking Request").insert({
+    supabase.table("Unprocessed Booking Request").insert({
         "telehandle": telehandle,
         "buttery": bookingDetails['buttery'],
         "date": bookingDetails['date'],
@@ -145,10 +146,9 @@ async def ask_purpose(update, context) -> int:
     return ConversationHandler.END
 
 # Function to send hourly reminders
-async def send_reminders():
-
+async def send_reminders(context):
     # Fetch bookings for the next hour
-    response = supabase.table("Processed Booking Request").select("*").execute()
+    response = supabase.table("Unprocessed Booking Request").select("*").execute()
 
     if response.data:
         for booking in response.data:
@@ -156,7 +156,7 @@ async def send_reminders():
             # if now <= booking_time <= now + timedelta(hours=1):
             telehandle = booking['telehandle']
             booking_details = (
-                f"Reminder: You have a booking at {booking['buttery']}.\n"
+                f"Reminder: You have a booking at <b>{booking['buttery']}</b>.\n"
                 f"Date: {booking['date']}\n"
                 f"Time: {booking['time']}\n"
                 f"Duration: {booking['duration']} hours\n"
@@ -173,7 +173,16 @@ async def send_reminders():
             await app_instance.bot.send_message(
                 chat_id=group_chat_id,
                 text=f"Reminder for @{telehandle}:\n\n{booking_details}",
-                message_thread_id=message_thread_id
+                message_thread_id=message_thread_id,
+                parse_mode='HTML'
+            )
+    else:
+        await app_instance.bot.send_message(
+                chat_id=group_chat_id,
+                text=f"Hi Buttery Booking team! This is your hourly reminder."
+                f"\nThere are <u>no</u> unprocessed bookings at the moment.",
+                message_thread_id=message_thread_id,
+                parse_mode='HTML'
             )
 
 # ConversationHandler for bookings
